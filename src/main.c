@@ -85,6 +85,11 @@ typedef struct {
     Pager* pages;
 } Table;
 
+typedef struct {
+    Table* table;
+    uint32_t row_num;
+    bool eot;
+} Cursor;
 
 
 //serialize a row
@@ -132,15 +137,49 @@ void* get_page(Pager* pager, uint32_t page_num){
 }
 
 //caluclate how to read particular row to/from the page table
-void* row_slot(Table* table, uint32_t row_num) {
-    //get the page that the row is on
-    uint32_t page_num = row_num / ROWS_PER_PAGE;
+// void* row_slot(Table* table, uint32_t row_num) {
+//     //get the page that the row is on
+//     uint32_t page_num = row_num / ROWS_PER_PAGE;
     
-    void* page = get_page(table->pages, page_num);
-    //get location in page
+//     void* page = get_page(table->pages, page_num);
+//     //get location in page
+//     uint32_t row_offset = row_num % ROWS_PER_PAGE;
+//     uint32_t byte_offset = row_offset * ROW_SIZE;
+//     return page + byte_offset;
+// }
+
+Cursor* start_table(Table* t){
+    Cursor* cursor = malloc(sizeof(Cursor));
+    cursor->table = table;
+    cursor->row_num = 0;
+    cursor->end_of_table = (table-> == 0);
+
+    return cursor;
+}
+
+Cursor* end_table(Table* table){
+    Cursor* cursor = malloc(sizeof(Cursor));
+    cursor->table = table;
+    cursor->row_num = table->num_rows;
+    cursor->end_of_table = true;
+
+    return cursor;
+}
+
+void* cursor_value(Cursor* c){
+    uint32_t row_num = c->row_num;
+    uint32_t page_num = row_num / ROWS_PER_PAGE;
+    void* page = get_page(cursor->table->pager, page_num);
     uint32_t row_offset = row_num % ROWS_PER_PAGE;
     uint32_t byte_offset = row_offset * ROW_SIZE;
     return page + byte_offset;
+}
+
+void cursor_adv(Cursor* c){
+    cursor->row_num += 1;
+    if (cursor->row_num >= cursor->table->num_rows){
+        cursor->eot = true;
+    }
 }
 
 //initializes a pager
@@ -364,21 +403,35 @@ ExecuteResult execute_insert(Statement* statement, Table* table) {
     }
 
     Row* row_inserted = &(statement->row_to_insert);
+    Cursor* cursor = table_end(table);
 
-    serialize_row(row_inserted, row_slot(table, table->num_rows)); //serialize the row into table
+    //serialize_row(row_inserted, row_slot(table, table->num_rows)); //serialize the row into table
+    serialize_row(row_to_insert, cursor_value(cursor));
     table->num_rows += 1; //increment rows in table
+
+    free(cursor);
 
     return EXECUTE_SUCCESS;
 }
 
 ExecuteResult execute_select(Statement* statement, Table* table) {
+    Cursor* cursor = table_start(table);
+
     Row row;
     //return all rows
-    for (uint32_t i = 0; i < table->num_rows; i++){
-        //deserialize row for printing
-        deserialize_row(row_slot(table, i), &row);
+    // for (uint32_t i = 0; i < table->num_rows; i++){
+    //     //deserialize row for printing
+    //     deserialize_row(row_slot(table, i), &row);
+    //     print_row(&row);
+    // }
+    while (!(cursor->end_of_table)) {
+        deserialize_row(cursor_value(cursor), &row);
         print_row(&row);
+        cursor_adv(cursor);
     }
+
+    free(cursor);
+    
     return EXECUTE_SUCCESS;
 }
 //executes statements
