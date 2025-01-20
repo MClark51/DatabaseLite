@@ -1,2 +1,6 @@
 src/*.exe
 src/*.db
+.cache
+.ssh
+.vscode-server
+.bash_history
