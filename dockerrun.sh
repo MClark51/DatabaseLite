@@ -1,0 +1,1 @@
+docker run --privileged --rm -v /Users/marco/Desktop/DatabaseImplementation:/root --name dbimpldev -it dbimpl
